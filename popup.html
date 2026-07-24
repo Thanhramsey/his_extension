@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VNPT HIS Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>VNPT HIS Medical</span>
+      </div>
+      <span class="version-tag">v1.0</span>
+    </header>
+
+    <div class="popup-body">
+      <div class="setting-card">
+        <div class="setting-info">
+          <strong>Kích hoạt Assistant Panel</strong>
+          <small>Tự động hiển thị bảng kết quả XN & CĐHA khi chọn bệnh nhân</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="chk-enable-extension" checked>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div class="setting-card">
+        <div class="setting-info">
+          <strong>Chế độ Giả lập (Demo Mode)</strong>
+          <small>Sử dụng dữ liệu mẫu kiểm thử khi chưa kết nối HIS thực tế</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="chk-demo-mode" checked>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div class="setting-card">
+        <div class="setting-info">
+          <strong>Chỉ hiển thị chỉ số Xét nghiệm Vượt cận</strong>
+          <small>Lọc tự động và chỉ hiện chỉ số ngoài khoảng bình thường</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="chk-only-abnormal" checked>
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div class="status-box" id="status-box">
+        ✅ Extension đang sẵn sàng làm việc trên VNPT HIS.
+      </div>
+    </div>
+
+    <footer class="popup-footer">
+      <button id="btn-open-his" class="btn-primary">
+        🌐 Truy cập VNPT HIS BV Gia Lai
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

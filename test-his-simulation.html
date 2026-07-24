@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giả lập Màn hình VNPT HIS - NTU02D021_BuongDieuTri</title>
+  <link rel="stylesheet" href="panel.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
+      font-size: 13px;
+    }
+    .his-mock-header {
+      background-color: #005A9E;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .his-mock-brand {
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .his-mock-nav {
+      background-color: #004578;
+      color: #e0e0e0;
+      padding: 8px 20px;
+      font-size: 12px;
+    }
+    .his-main-container {
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .his-card {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .his-card-title {
+      font-weight: bold;
+      color: #005A9E;
+      font-size: 14px;
+      margin-bottom: 12px;
+      border-bottom: 2px solid #005A9E;
+      padding-bottom: 6px;
+    }
+    table.his-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+    table.his-table th {
+      background-color: #e1dfdd;
+      color: #323130;
+      padding: 8px 10px;
+      text-align: left;
+      border: 1px solid #c8c6c4;
+    }
+    table.his-table td {
+      padding: 8px 10px;
+      border: 1px solid #e1dfdd;
+    }
+    table.his-table tr:hover {
+      background-color: #deecf9;
+      cursor: pointer;
+    }
+    table.his-table tr.selected {
+      background-color: #c7e0f4;
+      font-weight: bold;
+    }
+    .text-red {
+      color: #d13438;
+      font-weight: bold;
+    }
+    .btn-pacs-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background-color: #0078d4;
+      color: white;
+      border-radius: 3px;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .btn-pacs-link:hover {
+      background-color: #106ebe;
+    }
+  </style>
+</head>
+<body>
+  <div class="his-mock-header">
+    <div class="his-mock-brand">🏥 PHẦN MỀM QUẢN LÝ BỆNH VIỆN - VNPT HIS</div>
+    <div>Bác sĩ: Nguyễn Văn A | Bệnh viện Đa khoa Tỉnh Gia Lai</div>
+  </div>
+
+  <div class="his-mock-nav">
+    Trang chủ &gt; Nội trú &gt; <strong>NTU02D021_BuongDieuTri (Buồng điều trị nội trú)</strong>
+  </div>
+
+  <div class="his-main-container">
+    <!-- Thanh Header bệnh nhân VNPT HIS chuẩn -->
+    <div id="his-mock-patient-banner" style="background:#0f172a; color:#f8fafc; padding:12px 16px; border-radius:6px; font-size:13px; font-weight:600; margin-bottom:20px; border-left: 4px solid #0078d4;">
+      BN202607-00912 | NGUYỄN VĂN AN | 12/05/1978 (48 Tuổi) | Nam | Khoa Nội tổng hợp | Phòng :Buồng 02 | Giường :Giường 05
+    </div>
+
+    <!-- Bảng 1: Danh sách Bệnh nhân trong Buồng -->
+    <div class="his-card">
+      <div class="his-card-title">📋 DANH SÁCH BỆNH NHÂN ĐANG ĐIỀU TRỊ TRONG BUỒNG</div>
+      <p style="color: #605e5c;">💡 <i>Click vào từng bệnh nhân để kiểm thử Extension tự động bóc tách thông số Xét nghiệm & CĐHA (Live Scanner & Demo Mode)!</i></p>
+
+      <table class="his-table" id="his-patient-table">
+        <thead>
+          <tr>
+            <th>STT</th>
+            <th>Mã BN</th>
+            <th>Họ và tên</th>
+            <th>Tuổi</th>
+            <th>Giới</th>
+            <th>Giường</th>
+            <th>Chẩn đoán ban đầu</th>
+            <th>Trạng thái KCB</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="selected" data-patient-id="BN202607-00912">
+            <td>1</td>
+            <td><strong>BN202607-00912</strong></td>
+            <td>Nguyễn Văn An</td>
+            <td>48</td>
+            <td>Nam</td>
+            <td>Giường 05</td>
+            <td>Viêm phổi cộng đồng / Theo dõi Nhiễm trùng huyết</td>
+            <td><span style="color:red; font-weight:bold;">● Có KQ Xét nghiệm & CĐHA</span></td>
+          </tr>
+          <tr data-patient-id="BN202607-00441">
+            <td>2</td>
+            <td><strong>BN202607-00441</strong></td>
+            <td>Phần Thị Mai</td>
+            <td>62</td>
+            <td>Nữ</td>
+            <td>Giường 02</td>
+            <td>Nhồi máu cơ tim cấp ST chênh lên</td>
+            <td><span style="color:red; font-weight:bold;">● Có KQ Men tim & Siêu âm tim</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bảng 2: Giả lập Màn hình Bảng Xét Nghiệm VNPT HIS -->
+    <div class="his-card">
+      <div class="his-card-title">🧪 BẢNG KẾT QUẢ XÉT NGHIỆM BỆNH NHÂN (VNPT HIS GRID)</div>
+      
+      <table class="his-table" id="his-lab-table">
+        <thead>
+          <tr style="background-color: #f3f2f1;">
+            <th>STT</th>
+            <th>Tên chỉ số xét nghiệm</th>
+            <th>Kết quả</th>
+            <th>Đơn vị</th>
+            <th>Trị số bình thường</th>
+            <th>Ghi chú / Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody id="his-lab-tbody">
+          <!-- Rendered dynamically via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bảng 3: Giả lập Màn hình Bảng CĐHA VNPT HIS -->
+    <div class="his-card">
+      <div class="his-card-title">📷 DANH SÁCH KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH & LINK PACS</div>
+
+      <table class="his-table" id="his-imaging-table">
+        <thead>
+          <tr style="background-color: #f3f2f1;">
+            <th>STT</th>
+            <th>Xem phim (PACS)</th>
+            <th>Thời gian trả KQ</th>
+            <th>Bác sĩ đọc</th>
+            <th>Mã DV</th>
+            <th>Tên dịch vụ CĐHA</th>
+            <th>Kết luận Chẩn đoán</th>
+          </tr>
+        </thead>
+        <tbody id="his-imaging-tbody">
+          <!-- Rendered dynamically via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="his-card">
+      <div class="his-card-title">⚙️ HƯỚNG DẪN KIỂM THỬ EXTENSION CHROME</div>
+      <ol style="line-height: 1.8; color: #323130;">
+        <li>Mở trình duyệt Google Chrome, truy cập <code>chrome://extensions</code>.</li>
+        <li>Bật chế độ <strong>Developer mode</strong> (Góc trên bên phải).</li>
+        <li>Click <strong>Reload</strong> biểu tượng làm mới của Extension <strong>HIS VNPT Assistant</strong>.</li>
+        <li>Mở trang giả lập này và click vào nút màu xanh <strong>Kết quả KCB</strong> ở góc phải để trải nghiệm giao diện mới.</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // Dữ liệu giả lập Render DOM cho Màn hình HIS
+    const MOCK_DOM_DATA = {
+      'BN202607-00912': {
+        header: 'BN202607-00912 | NGUYỄN VĂN AN | 12/05/1978 (48 Tuổi) | Nam | Khoa Nội tổng hợp | Phòng :Buồng 02 | Giường :Giường 05',
+        lab: [
+          { stt: 1, name: 'Bạch cầu (WBC)', val: '15.6', unit: 'G/L', range: '4.0 - 10.0', abnormal: true },
+          { stt: 2, name: 'Hồng cầu (RBC)', val: '4.52', unit: 'T/L', range: '3.8 - 5.3', abnormal: false },
+          { stt: 3, name: 'Huyết sắc tố (HGB)', val: '138', unit: 'g/L', range: '120 - 165', abnormal: false },
+          { stt: 4, name: 'Neutrophil (%)', val: '84.2', unit: '%', range: '40 - 74', abnormal: true },
+          { stt: 5, name: 'CRP định lượng', val: '48.5', unit: 'mg/L', range: '< 5.0', abnormal: true },
+          { stt: 6, name: 'Ure máu', val: '6.2', unit: 'mmol/L', range: '2.5 - 7.5', abnormal: false },
+          { stt: 7, name: 'Creatinin máu', val: '92', unit: 'umol/L', range: '62 - 115', abnormal: false },
+          { stt: 8, name: 'AST (GOT)', val: '38.5', unit: 'U/L', range: '< 37', abnormal: true }
+        ],
+        imaging: [
+          { stt: 1, date: '24/07/2026 08:30:00', doctor: 'BS. Lê Hoàng Nam', code: 'XQ001', name: 'Chụp X-quang ngực thẳng [Số hóa 1 phim]', conclusion: 'Đám mờ rải rác hạ đòn và phế trường bên phải. Theo dõi Viêm phổi tiến triển.', pacsUrl: 'https://pacs-demo.vnpt.vn/viewer?id=BN202607-00912-XQ' },
+          { stt: 2, date: '24/07/2026 10:15:00', doctor: 'BS. Trần Minh Tâm', code: 'CT002', name: 'Chụp Cắt lớp vi tính lồng ngực (CT-Scanner)', conclusion: 'Tổn thương đông đặc thùy giữa phổi phải, kèm tràn dịch màng phổi lượng ít.', pacsUrl: 'https://pacs-demo.vnpt.vn/viewer?id=BN202607-00912-CT' }
+        ]
+      },
+      'BN202607-00441': {
+        header: 'BN202607-00441 | PHẦN THỊ MAI | 18/11/1964 (62 Tuổi) | Nữ | Khoa Tim mạch | Phòng :Buồng 01 | Giường :Giường 02',
+        lab: [
+          { stt: 1, name: 'Troponin T hs', val: '1450', unit: 'pg/mL', range: '< 14', abnormal: true },
+          { stt: 2, name: 'CK-MB', val: '68.2', unit: 'U/L', range: '< 24', abnormal: true },
+          { stt: 3, name: 'Glucose máu khẩn', val: '9.8', unit: 'mmol/L', range: '3.9 - 6.4', abnormal: true },
+          { stt: 4, name: 'Bạch cầu (WBC)', val: '9.1', unit: 'G/L', range: '4.0 - 10.0', abnormal: false }
+        ],
+        imaging: [
+          { stt: 1, date: '24/07/2026 07:45:00', doctor: 'BS. Phạm Thị Hoa', code: 'SA003', name: 'Siêu âm tim màu qua thành ngực', conclusion: 'Giảm động vùng mỏm và thành trước thất trái. EF = 45%. Tràn dịch màng ngoài tim nhẹ.', pacsUrl: 'https://pacs-demo.vnpt.vn/viewer?id=BN202607-00441-SA' }
+        ]
+      }
+    };
+
+    function renderDOMData(patientId) {
+      const data = MOCK_DOM_DATA[patientId] || MOCK_DOM_DATA['BN202607-00912'];
+      document.getElementById('his-mock-patient-banner').innerText = data.header;
+
+      // Render Lab
+      const labTbody = document.getElementById('his-lab-tbody');
+      labTbody.innerHTML = data.lab.map(item => `
+        <tr class="${item.abnormal ? 'abnormal' : ''}">
+          <td>${item.stt}</td>
+          <td><strong>${item.name}</strong></td>
+          <td class="${item.abnormal ? 'text-red' : ''}">${item.val}</td>
+          <td>${item.unit}</td>
+          <td>${item.range}</td>
+          <td>${item.abnormal ? '<span class="text-red">▲ Cao / Vượt cận</span>' : 'Bình thường'}</td>
+        </tr>
+      `).join('');
+
+      // Render Imaging
+      const imgTbody = document.getElementById('his-imaging-tbody');
+      imgTbody.innerHTML = data.imaging.map(item => `
+        <tr>
+          <td>${item.stt}</td>
+          <td>
+            <a href="${item.pacsUrl}" target="_blank" class="btn-pacs-link" data-pacs="true">
+              📷 Xem phim PACS
+            </a>
+          </td>
+          <td>${item.date}</td>
+          <td>${item.doctor}</td>
+          <td>${item.code}</td>
+          <td><strong>${item.name}</strong></td>
+          <td>${item.conclusion}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Default Render
+    renderDOMData('BN202607-00912');
+
+    // Click handler for switching patients
+    document.querySelectorAll('#his-patient-table tbody tr').forEach(tr => {
+      tr.addEventListener('click', function() {
+        document.querySelectorAll('#his-patient-table tbody tr').forEach(r => r.classList.remove('selected'));
+        this.classList.add('selected');
+        const pId = this.getAttribute('data-patient-id');
+        renderDOMData(pId);
+      });
+    });
+  </script>
+
+  <script src="dicom-viewer.js"></script>
+  <script src="content.js"></script>
+</body>
+</html>
