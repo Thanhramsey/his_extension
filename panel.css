@@ -75,8 +75,9 @@
 .his-drawer-panel {
   position: fixed;
   top: 0;
-  right: -530px;
-  width: 520px;
+  right: -700px;
+  width: 660px;
+  max-width: 90vw;
   height: 100vh;
   z-index: 999995;
   display: flex;
@@ -339,7 +340,7 @@
 }
 
 .his-abnormal-table td {
-  padding: 11px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e2e8f0;
   color: #0f172a;
 }
@@ -350,6 +351,45 @@
 
 .his-abnormal-row:hover {
   background-color: #ffe4e6;
+}
+
+/* Nổi bật cột Ngày thực hiện */
+.his-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #f0f9ff;
+  color: #0284c7;
+  border: 1px solid #7dd3fc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.his-abnormal-row .his-date-badge {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+/* Cột Tên xét nghiệm chữ nhỏ hơn, cắt ngắn chữ bằng dấu ... */
+.his-test-name-col {
+  max-width: 190px;
+  vertical-align: middle;
+}
+
+.his-test-name-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 190px;
 }
 
 .his-indicator-name {

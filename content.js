@@ -1585,7 +1585,11 @@
     });
 
     // 1. Tìm ô dải tham chiếu (chứa pattern "min - max" như "3.5 - 5.0mmol/l" hoặc "0 - 42u/l")
-    const rangeIdx = nonDateCells.findIndex(c => /[\d.,]+\s*[-~–—]\s*[\d.,]+/.test(c));
+    const rangeIdx = nonDateCells.findIndex(c => {
+      if (/^[A-Z]\d{1,3}-\d+$/i.test(c)) return false;
+      if (/^[A-Z]{1,3}\d{1,3}-\d+$/i.test(c)) return false;
+      return /[\d.,]+\s*[-~–—]\s*[\d.,]+/.test(c);
+    });
     if (rangeIdx !== -1) {
       range = nonDateCells[rangeIdx];
       const uMatch = range.match(/[0-9.,\s]+([a-zA-Z%^/0-9μµL]+)/);
@@ -2162,11 +2166,17 @@
 
           html += `
             <tr class="${ind.status !== 'NORMAL' ? 'his-abnormal-row' : ''}">
-              <td style="color:#94a3b8; white-space:nowrap;">${ind.performedAt || displayDate || 'N/A'}</td>
-              <td class="his-indicator-name" style="font-weight:600; color:#0f172a;">${ind.testName || group.serviceName}</td>
+              <td>
+                <span class="his-date-badge" title="Thời gian thực hiện: ${ind.performedAt || displayDate || 'N/A'}">
+                  📅 ${ind.performedAt || displayDate || 'N/A'}
+                </span>
+              </td>
+              <td class="his-test-name-col" title="${ind.testName || group.serviceName}">
+                <div class="his-test-name-text">${ind.testName || group.serviceName}</div>
+              </td>
               <td class="his-indicator-name">${ind.name}</td>
               <td class="his-indicator-value ${statusClass}">${ind.value} <span style="font-size:10px; font-weight:normal; color:#94a3b8;">${ind.unit}</span></td>
-              <td style="color:#94a3b8;">${ind.range || 'N/A'}</td>
+              <td style="color:#64748b; font-size:12px;">${ind.range || 'N/A'}</td>
               <td>
                 <span class="his-status-badge ${statusClass}">
                   ${statusText}

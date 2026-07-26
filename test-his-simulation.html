@@ -163,10 +163,11 @@
         <thead>
           <tr style="background-color: #f3f2f1;">
             <th>STT</th>
+            <th>Mã XN</th>
             <th>Tên chỉ số xét nghiệm</th>
             <th>Kết quả</th>
-            <th>Đơn vị</th>
             <th>Trị số bình thường</th>
+            <th>Đơn vị</th>
             <th>Ghi chú / Trạng thái</th>
           </tr>
         </thead>
@@ -178,18 +179,18 @@
 
     <!-- Bảng 3: Giả lập Màn hình Bảng CĐHA VNPT HIS -->
     <div class="his-card">
-      <div class="his-card-title">📷 DANH SÁCH KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH & LINK PACS</div>
+      <div class="his-card-title">📷 BẢNG KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH (DICOM / PACS)</div>
 
       <table class="his-table" id="his-imaging-table">
         <thead>
           <tr style="background-color: #f3f2f1;">
             <th>STT</th>
-            <th>Xem phim (PACS)</th>
-            <th>Thời gian trả KQ</th>
-            <th>Bác sĩ đọc</th>
-            <th>Mã DV</th>
+            <th>PACS / DICOM</th>
+            <th>Thời gian thực hiện</th>
+            <th>Bác sĩ chỉ định</th>
+            <th>Mã dịch vụ</th>
             <th>Tên dịch vụ CĐHA</th>
-            <th>Kết luận Chẩn đoán</th>
+            <th>Kết luận bác sĩ</th>
           </tr>
         </thead>
         <tbody id="his-imaging-tbody">
@@ -215,14 +216,16 @@
       'BN202607-00912': {
         header: 'BN202607-00912 | NGUYỄN VĂN AN | 12/05/1978 (48 Tuổi) | Nam | Khoa Nội tổng hợp | Phòng :Buồng 02 | Giường :Giường 05',
         lab: [
-          { stt: 1, name: 'Bạch cầu (WBC)', val: '15.6', unit: 'G/L', range: '4.0 - 10.0', abnormal: true },
-          { stt: 2, name: 'Hồng cầu (RBC)', val: '4.52', unit: 'T/L', range: '3.8 - 5.3', abnormal: false },
-          { stt: 3, name: 'Huyết sắc tố (HGB)', val: '138', unit: 'g/L', range: '120 - 165', abnormal: false },
-          { stt: 4, name: 'Neutrophil (%)', val: '84.2', unit: '%', range: '40 - 74', abnormal: true },
-          { stt: 5, name: 'CRP định lượng', val: '48.5', unit: 'mg/L', range: '< 5.0', abnormal: true },
-          { stt: 6, name: 'Ure máu', val: '6.2', unit: 'mmol/L', range: '2.5 - 7.5', abnormal: false },
-          { stt: 7, name: 'Creatinin máu', val: '92', unit: 'umol/L', range: '62 - 115', abnormal: false },
-          { stt: 8, name: 'AST (GOT)', val: '38.5', unit: 'U/L', range: '< 37', abnormal: true }
+          { stt: 1, code: 'H01-1', name: 'Bạch cầu (WBC)', val: '15.6', unit: 'G/L', range: '4.0 - 10.0', abnormal: true },
+          { stt: 2, code: 'H02-1', name: 'Hồng cầu (RBC)', val: '4.52', unit: 'T/L', range: '3.8 - 5.3', abnormal: false },
+          { stt: 3, code: 'H03-1', name: 'Huyết sắc tố (HGB)', val: '138', unit: 'g/L', range: '120 - 165', abnormal: false },
+          { stt: 4, code: 'H18-1', name: 'MO#', val: '0.45', unit: '10^9/L', range: '0.10 - 0.80', abnormal: false },
+          { stt: 5, code: 'H22-1', name: 'EO#', val: '0.08', unit: '10^9/L', range: '0.02 - 0.50', abnormal: false },
+          { stt: 6, code: 'H04-1', name: 'Neutrophil (%)', val: '84.2', unit: '%', range: '40 - 74', abnormal: true },
+          { stt: 7, code: 'S01-1', name: 'CRP định lượng', val: '48.5', unit: 'mg/L', range: '< 5.0', abnormal: true },
+          { stt: 8, code: 'S02-1', name: 'Ure máu', val: '6.2', unit: 'mmol/L', range: '2.5 - 7.5', abnormal: false },
+          { stt: 9, code: 'S03-1', name: 'Creatinin máu', val: '92', unit: 'umol/L', range: '62 - 115', abnormal: false },
+          { stt: 10, code: 'S04-1', name: 'AST (GOT)', val: '38.5', unit: 'U/L', range: '< 37', abnormal: true }
         ],
         imaging: [
           { stt: 1, date: '24/07/2026 08:30:00', doctor: 'BS. Lê Hoàng Nam', code: 'XQ001', name: 'Chụp X-quang ngực thẳng [Số hóa 1 phim]', conclusion: 'Đám mờ rải rác hạ đòn và phế trường bên phải. Theo dõi Viêm phổi tiến triển.', pacsUrl: 'https://pacs-demo.vnpt.vn/viewer?id=BN202607-00912-XQ' },
@@ -232,10 +235,10 @@
       'BN202607-00441': {
         header: 'BN202607-00441 | PHẦN THỊ MAI | 18/11/1964 (62 Tuổi) | Nữ | Khoa Tim mạch | Phòng :Buồng 01 | Giường :Giường 02',
         lab: [
-          { stt: 1, name: 'Troponin T hs', val: '1450', unit: 'pg/mL', range: '< 14', abnormal: true },
-          { stt: 2, name: 'CK-MB', val: '68.2', unit: 'U/L', range: '< 24', abnormal: true },
-          { stt: 3, name: 'Glucose máu khẩn', val: '9.8', unit: 'mmol/L', range: '3.9 - 6.4', abnormal: true },
-          { stt: 4, name: 'Bạch cầu (WBC)', val: '9.1', unit: 'G/L', range: '4.0 - 10.0', abnormal: false }
+          { stt: 1, code: 'S05-1', name: 'Troponin T hs', val: '1450', unit: 'pg/mL', range: '< 14', abnormal: true },
+          { stt: 2, code: 'S06-1', name: 'CK-MB', val: '68.2', unit: 'U/L', range: '< 24', abnormal: true },
+          { stt: 3, code: 'S07-1', name: 'Glucose máu khẩn', val: '9.8', unit: 'mmol/L', range: '3.9 - 6.4', abnormal: true },
+          { stt: 4, code: 'H01-1', name: 'Bạch cầu (WBC)', val: '9.1', unit: 'G/L', range: '4.0 - 10.0', abnormal: false }
         ],
         imaging: [
           { stt: 1, date: '24/07/2026 07:45:00', doctor: 'BS. Phạm Thị Hoa', code: 'SA003', name: 'Siêu âm tim màu qua thành ngực', conclusion: 'Giảm động vùng mỏm và thành trước thất trái. EF = 45%. Tràn dịch màng ngoài tim nhẹ.', pacsUrl: 'https://pacs-demo.vnpt.vn/viewer?id=BN202607-00441-SA' }
@@ -252,10 +255,11 @@
       labTbody.innerHTML = data.lab.map(item => `
         <tr class="${item.abnormal ? 'abnormal' : ''}">
           <td>${item.stt}</td>
+          <td>${item.code}</td>
           <td><strong>${item.name}</strong></td>
           <td class="${item.abnormal ? 'text-red' : ''}">${item.val}</td>
-          <td>${item.unit}</td>
           <td>${item.range}</td>
+          <td>${item.unit}</td>
           <td>${item.abnormal ? '<span class="text-red">▲ Cao / Vượt cận</span>' : 'Bình thường'}</td>
         </tr>
       `).join('');
