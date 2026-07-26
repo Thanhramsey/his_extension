@@ -30,6 +30,7 @@
     },
     labResults: [],
     imagingResults: [],
+    orderedServices: [],
     hasScannedCurrentPatient: false,
     isScanning: false,
     scanProgress: '',
@@ -889,8 +890,21 @@
       
       if (currentCode !== '---' && currentCode !== lastPatientCode) {
         lastPatientCode = currentCode;
-        state.hasScannedCurrentPatient = false; // Reset flag cho bệnh nhân mới!
-        logDebug(`[Patient] Chọn bệnh nhân mới: ${state.selectedPatient.name} (${currentCode})`);
+        state.labResults = [];
+        state.imagingResults = [];
+        state.orderedServices = [];
+        state.orderedServiceMap = {};
+        state.hasScannedCurrentPatient = false;
+
+        const docsToScan = getAllAccessibleDocs();
+        docsToScan.forEach(doc => {
+          doc.querySelectorAll('*').forEach(el => {
+            delete el.__his_sheet_scanned__;
+            delete el.__his_autoclicked__;
+          });
+        });
+
+        logDebug(`[Patient] Đã xóa toàn bộ dữ liệu cũ và chọn bệnh nhân mới: ${state.selectedPatient.name} (${currentCode})`);
       }
     }, 2000);
   }
@@ -951,8 +965,8 @@
         state.selectedPatient.code = newCode;
         state.labResults = [];
         state.imagingResults = [];
-
-        // Chi cap nhat thong tin benh nhan; khong tu dong autoscan de tranh lag.
+        state.orderedServices = [];
+        state.orderedServiceMap = {};
       }
     }
 
@@ -999,6 +1013,8 @@
         state.selectedPatient.code = newCode;
         state.labResults = [];
         state.imagingResults = [];
+        state.orderedServices = [];
+        state.orderedServiceMap = {};
 
         // Click benh nhan moi -> kich hoat mot lan luong XN nhe.
         setTimeout(() => requestAutoScanFromTop('row-new-patient'), 250);
@@ -1206,18 +1222,20 @@
     if (n === 'mã xét nghiệm' || n === 'tên xét nghiệm' || n === 'kết quả' || n === 'trị số bình thường' || n === 'stt') return true;
     if (v === 'mã xét nghiệm' || v === 'tên xét nghiệm' || v === 'kết quả' || v === 'trị số bình thường') return true;
 
-    // Giá trị kết quả xét nghiệm bắt buộc phải là chuỗi số thập phân/nguyên hợp lệ
-    // Đã loại bỏ tất cả khoảng trắng và các ký tự zero-width ẩn
+    // Giá trị kết quả xét nghiệm bắt buộc phải chứa số thập phân/nguyên hoặc là định tính hợp lệ
     const valClean = value.replace(/[\u200B-\u200D\uFEFF\u200E\u200F\u00A0\s]/g, '').replace(',', '.');
-    const isNumeric = /^[-+]?\d+([.]\d+)?$/.test(valClean);
-    if (!isNumeric && !isLikelyQualitativeResult(value) && !value.includes('*') && !value.toLowerCase().includes('tăng') && !value.toLowerCase().includes('giảm')) {
-      return true; // Lọc bỏ các dòng chứa văn bản dịch vụ viện phí làm giá trị
+    const hasNumber = /^([<>]=?\s*)?[-+]?\d+([.]\d+)?/.test(valClean) || /\d/.test(valClean);
+    if (!hasNumber && !isLikelyQualitativeResult(value) && !value.includes('*') && !value.toLowerCase().includes('tăng') && !value.toLowerCase().includes('giảm')) {
+      return true; // Lọc bỏ các dòng không phải kết quả XN
     }
 
-    if (name.length > 70 || value.length > 15) return true;
+    // Bỏ qua các dòng mà tên chỉ số là 1 dãy số ID thuần túy (ví dụ: 14886475)
+    if (/^\d+$/.test(name.trim())) return true;
+
+    if (name.length > 120 || value.length > 25) return true;
     if (/\d{2}\/\d{2}\/\d{4}/.test(name) || /\d{2}\/\d{2}\/\d{4}/.test(value)) return true; // Lọc bỏ dòng chứa ngày tháng
-    if (/[A-F0-9]{12,}/i.test(name)) return true; // Lọc các mã GUID rác từ cache grid
-    if (/(\d)\1{4,}/.test(value)) return true; // Lọc các dãy số lặp rác như 222222, 777777
+    if (/[A-F0-9]{16,}/i.test(name)) return true; // Lọc các mã GUID rác từ cache grid
+    if (/(\d)\1{5,}/.test(value)) return true; // Lọc các dãy số lặp rác như 222222, 777777
 
     return false;
   }
@@ -1245,6 +1263,175 @@
     return result;
   }
 
+  function extractOrderedServicesFromDOM() {
+    const docs = getAllAccessibleDocs();
+    const serviceList = [];
+    const serviceMap = {};
+
+    docs.forEach(doc => {
+      const elements = doc.querySelectorAll('table, div[role="grid"], .ui-jqgrid, .jqx-grid, div[class*="grid"]');
+      elements.forEach(el => {
+        const text = (el.innerText || '').toLowerCase();
+        if (text.includes('dịch vụ chỉ định') || text.includes('dich vu chi dinh') || text.includes('tên dịch vụ') || text.includes('ten dich vu') || text.includes('danh sách dịch vụ') || text.includes('phiếu chỉ định') || text.includes('chỉ định dịch vụ') || text.includes('tên xét nghiệm')) {
+          const rows = Array.from(el.querySelectorAll('tr, div[role="row"]'));
+          if (rows.length < 2) return;
+
+          let codeColIdx = -1;
+          let nameColIdx = 2; // Cột số 2 mặc định là Tên xét nghiệm như cấu trúc bảng VNPT HIS
+
+          // Quét 3 hàng đầu để định vị đúng cột Tên xét nghiệm
+          for (let i = 0; i < Math.min(3, rows.length); i++) {
+            const headerCells = Array.from(rows[i].querySelectorAll('th, td, div[role="columnheader"]')).map(c => normalizeVietnameseText(c.innerText));
+            headerCells.forEach((hText, idx) => {
+              if (hText.includes('ma xet nghiem') || hText.includes('ma dv') || hText.includes('ma mbp')) {
+                codeColIdx = idx;
+              }
+              if (hText.includes('ten xet nghiem') || hText.includes('ten dich vu') || hText.includes('ten dv')) {
+                nameColIdx = idx;
+              }
+            });
+          }
+
+          rows.forEach(r => {
+            const cells = Array.from(r.querySelectorAll('td, th, div[role="gridcell"]')).map(c => cleanString(c.innerText));
+            if (cells.length <= nameColIdx) return;
+
+            const serviceName = cells[nameColIdx] || '';
+            const serviceCode = codeColIdx !== -1 ? (cells[codeColIdx] || '') : '';
+
+            const norm = normalizeVietnameseText(serviceName);
+            if (serviceName && serviceName.length >= 5 && /\s/.test(serviceName) &&
+                !isHeaderOrMetadataText(serviceName) &&
+                !isDoctorOrPersonName(serviceName) &&
+                !isLikelyQualitativeResult(serviceName) &&
+                !isRangeString(serviceName)) {
+              
+              if (!serviceList.includes(serviceName)) {
+                serviceList.push(serviceName);
+              }
+              if (serviceCode) {
+                serviceMap[serviceCode.toUpperCase()] = serviceName;
+              }
+            }
+          });
+        }
+      });
+    });
+
+    state.orderedServiceMap = serviceMap;
+    logDebug(`[ServiceScan] Tìm thấy ${serviceList.length} dịch vụ chỉ định từ Cột 2 tab Dịch vụ chỉ định`);
+    return serviceList;
+  }
+
+  function isHeaderOrMetadataText(text) {
+    if (!text) return false;
+    const t = normalizeVietnameseText(text);
+    if (!t) return false;
+    return (
+      t.includes('ma xet nghiem') ||
+      t.includes('ten xet nghiem') ||
+      t.includes('ma dv') ||
+      t.includes('ten dv') ||
+      t.includes('ten chi dinh') ||
+      t.includes('danh sach') ||
+      t.includes('tri so binh thuong') ||
+      t.includes('gia tri binh thuong') ||
+      t.includes('ket qua') ||
+      t.includes('don vi') ||
+      t.includes('nguoi tra') ||
+      t.includes('nguoi thuc hien') ||
+      t.includes('loai mbp') ||
+      t.includes('ma mbp') ||
+      t.includes('mau benh pham') ||
+      t.includes('loai mau') ||
+      t.includes('loai thanh toan') ||
+      t.includes('thanh toan') ||
+      t.includes('so luong') ||
+      t.includes('don gia') ||
+      t.includes('thanh tien')
+    );
+  }
+
+  function matchServiceFromOrderedList(rawTestName, indicatorName, orderedServices) {
+    const list = orderedServices || state.orderedServices || [];
+
+    const rawNorm = normalizeVietnameseText(rawTestName || '');
+    const indNorm = normalizeVietnameseText(indicatorName || '');
+
+    // 0. Ưu tiên khớp theo Mã xét nghiệm / Mã MBP từ tab chỉ định nếu có
+    if (state.orderedServiceMap && indicatorName) {
+      const codeMatch = indicatorName.match(/\(([A-Z0-9._-]+)\)/i);
+      const codeKey = codeMatch ? codeMatch[1].toUpperCase() : indicatorName.trim().toUpperCase();
+      if (state.orderedServiceMap[codeKey]) {
+        return state.orderedServiceMap[codeKey];
+      }
+    }
+
+    // 1. Nếu rawTestName hợp lệ và không phải header, thử khớp với danh sách dịch vụ chỉ định
+    if (rawNorm && rawNorm !== 'xet nghiem can lam sang' && !isHeaderOrMetadataText(rawTestName) && !isDoctorOrPersonName(rawTestName) && !isRangeString(rawTestName)) {
+      const match = list.find(s => {
+        const sNorm = normalizeVietnameseText(s);
+        return sNorm === rawNorm || sNorm.includes(rawNorm) || rawNorm.includes(sNorm);
+      });
+      if (match) return match;
+    }
+
+    // 2. Tự động khớp theo tên chỉ số đặc trưng với danh sách dịch vụ chỉ định
+    if (indNorm) {
+      // Công thức máu: WBC, RBC, HGB, PLT, MPV, PCT, PDW, BA#, EO#, MO#, NE#, LY#, NEU#, LYM#, MONO#, EOS#, BASO#...
+      if (indNorm.includes('wbc') || indNorm.includes('rbc') || indNorm.includes('hgb') || indNorm.includes('plt') || indNorm.includes('hct') || indNorm.includes('mcv') || indNorm.includes('mch') || indNorm.includes('mchc') || indNorm.includes('rdw') || indNorm.includes('mpv') || indNorm.includes('pct') || indNorm.includes('pdw') || indNorm.includes('bach cau') || indNorm.includes('hong cau') || indNorm.includes('tieu cau') || indNorm.includes('ba#') || indNorm.includes('eo#') || indNorm.includes('mo#') || indNorm.includes('ne#') || indNorm.includes('ly#') || indNorm.includes('neu#') || indNorm.includes('lym#') || indNorm.includes('mono#') || indNorm.includes('eos#') || indNorm.includes('baso#') || indNorm.includes('h18') || indNorm.includes('h22')) {
+        const match = list.find(s => {
+          const sn = normalizeVietnameseText(s);
+          return sn.includes('te bao mau') || sn.includes('cong thuc mau') || sn.includes('laser');
+        });
+        if (match) return match;
+      }
+
+      // Điện giải đồ: Na, K, Cl, Na+, K+, Cl-, S07, S08, S10...
+      if (indNorm.includes('na') || indNorm.includes('k') || indNorm.includes('cl') || indNorm.includes('dien gia') || indNorm.includes('s07') || indNorm.includes('s08') || indNorm.includes('s10')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('dien gia'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('hiv')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('hiv'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('tb') || indNorm.includes('lao')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('lao') || normalizeVietnameseText(s).includes('tuberculosis'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('creatinin')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('creatinin'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('glucose') || indNorm.includes('duong mau')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('glucose'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('crp')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('crp'));
+        if (match) return match;
+      }
+
+      if (indNorm.includes('ast') || indNorm.includes('alt') || indNorm.includes('got') || indNorm.includes('gpt')) {
+        const match = list.find(s => normalizeVietnameseText(s).includes('ast') || normalizeVietnameseText(s).includes('alt') || normalizeVietnameseText(s).includes('men gan'));
+        if (match) return match;
+      }
+    }
+
+    // 3. Fallback tên đã trích xuất nếu hợp lệ và không phải text header
+    if (rawTestName && rawTestName !== 'Xét nghiệm cận lâm sàng' && !isHeaderOrMetadataText(rawTestName) && !isDoctorOrPersonName(rawTestName) && !isRangeString(rawTestName) && !isLikelyQualitativeResult(rawTestName)) {
+      return rawTestName;
+    }
+
+    return 'Xét nghiệm cận lâm sàng';
+  }
+
   let _lastExtractAt = 0;
 
   function extractRealDataFromHIS(force) {
@@ -1253,6 +1440,8 @@
     const now = Date.now();
     if (!force && now - _lastExtractAt < 1000) return;
     _lastExtractAt = now;
+
+    state.orderedServices = extractOrderedServicesFromDOM();
 
     let realLabGroups = [];
     let realImagingGroups = [];
@@ -1387,6 +1576,25 @@
     return results;
   }
 
+  function isCellVisible(cell) {
+    if (!cell) return false;
+    try {
+      if (cell.style && (cell.style.display === 'none' || cell.style.visibility === 'hidden')) return false;
+      if (cell.getAttribute && cell.getAttribute('hidden') !== null) return false;
+      if (cell.classList) {
+        if (
+          cell.classList.contains('ui-helper-hidden') ||
+          cell.classList.contains('jqx-hidegridcolumn') ||
+          cell.classList.contains('hidden') ||
+          cell.classList.contains('nodata')
+        ) return false;
+      }
+      const parent = cell.parentElement;
+      if (parent && parent.style && parent.style.display === 'none') return false;
+    } catch(e) {}
+    return true;
+  }
+
   function detectColumnIndices(rows, container) {
     let codeIdx = -1, nameIdx = -1, valIdx = -1, unitIdx = -1, rangeIdx = -1;
 
@@ -1400,13 +1608,13 @@
     const allHeaderRows = [...headerRows, ...rows];
 
     allHeaderRows.forEach(r => {
-      const cells = Array.from(r.querySelectorAll('th, td')).map(c => cleanString(c.innerText));
+      const visibleCellEls = Array.from(r.querySelectorAll('th, td')).filter(c => isCellVisible(c));
+      const cells = visibleCellEls.map(c => cleanString(c.innerText));
       const rowTextLower = cells.join(' ').toLowerCase();
 
       if (rowTextLower.includes('danh sách') && cells.length < 3) return;
 
       cells.forEach((text, i) => {
-        const t = text.toLowerCase();
         const tNorm = normalizeVietnameseText(text);
         if (tNorm === 'ma xet nghiem' || tNorm === 'ma xn' || tNorm === 'ma chi so' || tNorm.includes('ma xet nghiem')) {
           codeIdx = i;
@@ -1453,11 +1661,52 @@
     return match ? match[0] : '';
   }
 
+  function isUnitString(str) {
+    if (!str) return false;
+    const s = cleanString(str).trim();
+    if (!s) return false;
+    return /^(mmol|umol|µmol|mol|g|mg|mcg|ug|μg|u|iu|l|dl|ml|t|g\/l|t\/l|u\/l|iu\/l|umol\/l|mmol\/l|mg\/l|mg\/dl|pg\/ml|\%|10\^9\/l|10\^12\/l)$/i.test(s) ||
+           /^[a-z0-9%^μµ/-]{1,10}\/[a-z0-9%^μµ/-]{1,10}$/i.test(s);
+  }
+
+  function isLikelyQualitativeResult(text) {
+    if (!text) return false;
+    const tNorm = normalizeVietnameseText(cleanString(text));
+    if (!tNorm) return false;
+    return (
+      tNorm.includes('am tinh') ||
+      tNorm.includes('duong tinh') ||
+      tNorm.includes('amtinh') ||
+      tNorm.includes('duongtinh') ||
+      tNorm.includes('negative') ||
+      tNorm.includes('positive') ||
+      tNorm.includes('khong phat hien') ||
+      tNorm.includes('khong thay') ||
+      tNorm.includes('khong phan ung') ||
+      tNorm.includes('phan ung') ||
+      tNorm.includes('vet') ||
+      tNorm.includes('binh thuong') ||
+      tNorm.includes('bat thuong') ||
+      tNorm.includes('dat')
+    );
+  }
+
+  function isRangeString(text) {
+    if (!text) return false;
+    const t = cleanString(text).trim();
+    if (!t) return false;
+    if (/[\d.,]+\s*[-~–—]\s*[\d.,]+/.test(t)) return true;
+    if (/^([<>]=?\s*)?[\d.,]+/.test(t) && /[-~–—]/.test(t)) return true;
+    if (/^0\s*[-~–—]\s*\d+/.test(t)) return true;
+    if (/^<=\s*[\d.,]+|^>=\s*[\d.,]+|^<\s*[\d.,]+|^>\s*[\d.,]+/.test(t)) return true;
+    return false;
+  }
+
   function isLikelyIndicatorLabel(text) {
     const value = cleanString(text || '');
     if (!value) return false;
     if (/\d/.test(value)) return false;
-    if (isRowStatusText(value) || isLikelyQualitativeResult(value)) return false;
+    if (isRowStatusText(value) || isLikelyQualitativeResult(value) || isUnitString(value)) return false;
     if (value.length < 2 || value.length > 16) return false;
     return /^[A-ZÀ-Ỵ%()+/#.-]+$/i.test(value);
   }
@@ -1467,10 +1716,10 @@
     const hashLabel = candidates.find(c => /#/.test(c) && /^[A-ZÀ-Ỵ0-9#%()+/.-]+$/i.test(c) && c.length <= 8);
     if (hashLabel) return hashLabel;
 
-    const shortLabel = candidates.find(c => /^[A-ZÀ-Ỵ%()+/.-]{2,8}$/i.test(c) && !/\d/.test(c));
+    const shortLabel = candidates.find(c => /^[A-ZÀ-Ỵ%()+/.-]{2,8}$/i.test(c) && !/\d/.test(c) && !isUnitString(c));
     if (shortLabel) return shortLabel;
 
-    const preferred = candidates.find(c => isLikelyIndicatorLabel(c));
+    const preferred = candidates.find(c => isLikelyIndicatorLabel(c) && !isUnitString(c));
     if (preferred) return preferred;
 
     const codeLike = candidates.find(c => {
@@ -1500,7 +1749,7 @@
     }
 
     const labelCandidate = cleaned.find(c => /#/.test(c) && /^[A-ZÀ-Ỵ0-9#%()+/.-]+$/i.test(c) && c.length <= 8) ||
-      cleaned.find(c => /^[A-ZÀ-Ỵ%()+/.-]{2,8}$/i.test(c) && !/\d/.test(c));
+      cleaned.find(c => /^[A-ZÀ-Ỵ%()+/.-]{2,8}$/i.test(c) && !/\d/.test(c) && !isUnitString(c));
 
     // Uu tien ket qua dinh tinh truoc de tranh lay nham ma so ky thuat.
     let valueCandidate = cleaned.find(c => {
@@ -1514,7 +1763,7 @@
         if (isRowStatusText(c)) return false;
         const v = c.replace(/\s/g, '').replace(',', '.');
         if (/^\d{6,}$/.test(v)) return false;
-        return /^[-+]?\d+(\.\d+)?$/.test(v) || /\b[HL]\b/i.test(c) || c.includes('*');
+        return /^([<>]=?\s*)?[-+]?\d+([.,]\d+)?/.test(v) || /\b[HL]\b/i.test(c) || c.includes('*');
       }) || '';
     }
 
@@ -1531,6 +1780,7 @@
       if (!n || n.length < 3) return false;
       if (isRowStatusText(c)) return false;
       if (isLikelyQualitativeResult(c)) return false;
+      if (isUnitString(c)) return false;
       if (/^[A-Z]\d{1,3}-\d+$/i.test(c)) return false;
       if (/^[A-Z]{1,3}\d{1,3}-\d+$/i.test(c)) return false;
       if (/^[A-F0-9]{16,}$/i.test(c.replace(/\s/g, ''))) return false;
@@ -1543,7 +1793,7 @@
 
     if (!nameCandidate && cleaned.length > 0) {
       nameCandidate = cleaned.find(c => {
-        if (isRowStatusText(c) || isLikelyQualitativeResult(c)) return false;
+        if (isRowStatusText(c) || isLikelyQualitativeResult(c) || isUnitString(c)) return false;
         if (/^[A-Z]\d{1,3}-\d+$/i.test(c)) return false;
         if (/^[A-Z]{1,3}\d{1,3}-\d+$/i.test(c)) return false;
         return true;
@@ -1565,6 +1815,45 @@
     };
   }
 
+  function isDoctorOrPersonName(text) {
+    if (!text) return false;
+    const t = cleanString(text).trim();
+    if (!t) return false;
+    const lower = t.toLowerCase();
+
+    if (
+      lower.startsWith('bs.') ||
+      lower.startsWith('bs ') ||
+      lower.startsWith('ktv.') ||
+      lower.startsWith('ktv ') ||
+      lower.startsWith('ths.') ||
+      lower.startsWith('ts.') ||
+      lower.startsWith('cn.') ||
+      lower.includes('bác sĩ') ||
+      lower.includes('kỹ thuật viên') ||
+      lower.includes('người thực hiện') ||
+      lower.includes('người trả') ||
+      lower.includes('người nhập') ||
+      lower.includes('thực hiện bởi')
+    ) {
+      return true;
+    }
+
+    const words = t.split(/\s+/);
+    if (words.length >= 2 && words.length <= 5) {
+      const firstWord = words[0].replace(/[^a-zA-ZàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđĐ]/g, '');
+      const commonSurnames = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Huỳnh', 'Vũ', 'Võ', 'Đặng', 'Bùi', 'Đỗ', 'Hồ', 'Ngô', 'Dương', 'Lý', 'Đào', 'Đinh', 'Đoàn', 'Trịnh', 'Mai', 'Phan', 'Trương', 'Lương'];
+      if (commonSurnames.some(s => s.toLowerCase() === firstWord.toLowerCase())) {
+        const isLabTerm = lower.includes('xét nghiệm') || lower.includes('tế bào') || lower.includes('định lượng') || lower.includes('điện giải') || lower.includes('máu') || lower.includes('nước tiểu') || lower.includes('sinh hóa') || lower.includes('miễn dịch') || lower.includes('tổng phân tích') || lower.includes('nội tiết') || lower.includes('chỉ số');
+        if (!isLabTerm) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   function parseRowDynamically(cells, rowElement) {
     if (!cells || cells.length < 2) return null;
 
@@ -1578,7 +1867,7 @@
     const nonDateCells = cells.filter(c => c && !/\d{2}\/\d{2}\/\d{4}/.test(c));
 
     const textCandidates = nonDateCells.filter(c => {
-      if (!c || isRowStatusText(c) || isLikelyQualitativeResult(c)) return false;
+      if (!c || isRowStatusText(c) || isLikelyQualitativeResult(c) || isDoctorOrPersonName(c)) return false;
       if (/^[A-Z]\d{1,3}-\d+$/i.test(c)) return false;
       if (/^[A-Z]{1,3}\d{1,3}-\d+$/i.test(c)) return false;
       return /[a-zA-ZàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđĐ]/.test(c);
@@ -1596,16 +1885,29 @@
       if (uMatch) unit = uMatch[1].trim();
     }
 
-    // 2. Tìm ô giá trị (chứa số kết quả như "3.2", "97", "47.15", "7.73")
-    const valIdx = nonDateCells.findIndex((c, idx) => 
-      idx !== rangeIdx &&
-      /^[-+]?\d+([.,]\d+)?$/.test(c) &&
-      !/^(19|20)\d{2}$/.test(c) &&
-      !/^\d{5,}$/.test(c)
-    );
+    // 2. Tìm ô giá trị (chứa số kết quả như "3.2", "97", "47.15", "7.73", "9.8 mmol/L", "< 5.0")
+    const valIdx = nonDateCells.findIndex((c, idx) => {
+      if (idx === rangeIdx) return false;
+      const cClean = c.trim();
+      if (!/\d/.test(cClean)) return false;
+      if (/\d{2}\/\d{2}\/\d{4}/.test(cClean)) return false;
+      if (/^(19|20)\d{2}$/.test(cClean)) return false;
+      if (/^\d{8,}$/.test(cClean.replace(/\s/g, ''))) return false;
+      return /^([<>]=?\s*)?[-+]?\d+([.,]\d+)?(\s*[a-zA-Z%^/0-9μµL]+)?$/i.test(cClean);
+    });
 
     if (valIdx !== -1) {
-      value = nonDateCells[valIdx];
+      const rawVal = nonDateCells[valIdx];
+      const match = rawVal.match(/^([<>]=?\s*[-+]?\d+([.,]\d+)?)(.*)$/);
+      if (match) {
+        value = match[1].trim();
+        const inlineUnit = match[3].trim();
+        if (inlineUnit && !unit) {
+          unit = inlineUnit;
+        }
+      } else {
+        value = rawVal;
+      }
     }
 
     // Dữ liệu định tính (HIV test nhanh, PCR...) có thể không phải số.
@@ -1629,7 +1931,17 @@
       name = hashLabel;
     }
 
-    const longNameCandidate = textCandidates.find(c => c.length > 18 && /\s/.test(c)) || '';
+    const longNameCandidate = textCandidates.find(c => 
+      c !== name && 
+      c !== value && 
+      c !== range &&
+      !isRangeString(c) &&
+      c.length >= 6 && 
+      /\s/.test(c) && 
+      !isDoctorOrPersonName(c) && 
+      !isLikelyQualitativeResult(c) &&
+      !c.toLowerCase().includes('lần')
+    ) || '';
     if (longNameCandidate) {
       testName = longNameCandidate;
     }
@@ -1649,14 +1961,27 @@
       idx !== rangeIdx && idx !== valIdx && idx !== codeIdx &&
       c.length >= 2 && !/^\d+$/.test(c) &&
       c.toLowerCase() !== 'x' && c.toLowerCase() !== 'n/a' &&
-      !c.toLowerCase().includes('mã xét nghiệm') && !c.toLowerCase().includes('tên xét nghiệm')
+      !c.toLowerCase().includes('mã xét nghiệm') && !c.toLowerCase().includes('tên xét nghiệm') &&
+      !isDoctorOrPersonName(c) &&
+      !isLikelyQualitativeResult(c) &&
+      !isRangeString(c)
     );
     if (nameIdx !== -1) {
       name = nonDateCells[nameIdx];
     }
 
     if (!testName) {
-      testName = nonDateCells.find(c => c !== name && c !== value && c !== range && /\s/.test(c) && c.length > 8) || '';
+      testName = nonDateCells.find(c => 
+        c !== name && 
+        c !== value && 
+        c !== range && 
+        !isRangeString(c) &&
+        /\s/.test(c) && 
+        c.length >= 5 && 
+        !isDoctorOrPersonName(c) && 
+        !isLikelyQualitativeResult(c) &&
+        !c.toLowerCase().includes('lần')
+      ) || '';
     }
 
     // Nếu tên đang là chuỗi dài của cả xét nghiệm, đổi lại ưu tiên mã ngắn như HGB/PLT/WBC.
@@ -1706,8 +2031,10 @@
     logDebug(`[Parse] Phát hiện cột: code=${codeIdx}, name=${nameIdx}, val=${valIdx}, range=${rangeIdx}`);
 
     rows.forEach((r, idx) => {
-      // Giữ nguyên các ô rỗng để chỉ số cột (index) khớp 1-to-1 chính xác với Header
-      const cells = Array.from(r.querySelectorAll('td, th').length > 0 ? r.querySelectorAll('td, th') : r.querySelectorAll('div[role="gridcell"], div.jqx-grid-cell, div')).map(c => cleanString(c.innerText));
+      // Chỉ lấy các ô ĐANG HIỂN THỊ (Visible cells) để loại bỏ các cột chứa ID CSDL ẩn của jqGrid
+      const rawEls = Array.from(r.querySelectorAll('td, th').length > 0 ? r.querySelectorAll('td, th') : r.querySelectorAll('div[role="gridcell"], div.jqx-grid-cell, div'));
+      const visibleEls = rawEls.filter(c => isCellVisible(c));
+      const cells = visibleEls.map(c => cleanString(c.innerText));
       const cellsClean = cells.filter(Boolean);
       if (cellsClean.length < 2) {
         return;
@@ -1725,10 +2052,33 @@
         return;
       }
 
-      if (cells.length === 1 || r.classList.contains('group-header') || r.classList.contains('jqx-grid-groups-row')) {
+      const nonDateCellsClean = cellsClean.filter(c => !/\d{2}\/\d{2}\/\d{4}/.test(c));
+      const hasResultValue = nonDateCellsClean.some(c => {
+        const val = c.trim();
+        if (/^\d{5,}$/.test(val.replace(/\s/g, ''))) return false; // Bỏ qua ID CSDL ẩn
+        if (/^([<>]=?\s*)?[-+]?\d+([.,]\d+)?$/.test(val)) return true;
+        if (/[\d.,]+\s*[-~–—]\s*[\d.,]+/.test(val)) return true;
+        if (isLikelyQualitativeResult(val)) return true;
+        return false;
+      });
+
+      const isGroupHeaderRow = 
+        cells.length === 1 || 
+        r.classList.contains('group-header') || 
+        r.classList.contains('jqx-grid-groups-row') ||
+        r.querySelector('td[colspan], th[colspan]') !== null ||
+        (!hasResultValue && nonDateCellsClean.some(c => c.length >= 10 && /\s/.test(c) && !isDoctorOrPersonName(c) && !isLikelyQualitativeResult(c)));
+
+      if (isGroupHeaderRow) {
         const groupText = r.innerText.trim().replace(/^[☒☑\s+-\s]+/, '');
-        if (groupText && !groupText.toLowerCase().includes('mã xét nghiệm') && !groupText.toLowerCase().includes('danh sách')) {
-          serviceName = groupText;
+        const groupTextClean = groupText.replace(/\(\d+\s*chỉ số\)/i, '').trim();
+        if (groupTextClean && 
+            !groupTextClean.toLowerCase().includes('mã xét nghiệm') && 
+            !groupTextClean.toLowerCase().includes('tên xét nghiệm') && 
+            !groupTextClean.toLowerCase().includes('danh sách') && 
+            !isDoctorOrPersonName(groupTextClean) &&
+            !isLikelyQualitativeResult(groupTextClean)) {
+          serviceName = groupTextClean;
           logDebug(`[Parse] Group header mới: "${serviceName}"`);
         }
         return;
@@ -1740,10 +2090,13 @@
         const isGarbage = isGarbageIndicator(dynamicInd.name, dynamicInd.value);
         logDebug(`[Parse] Dòng ${idx}: name="${dynamicInd.name}", value="${dynamicInd.value}", range="${dynamicInd.range}", isGarbage=${isGarbage}`);
         if (!isGarbage) {
-          if (serviceName === 'Xét nghiệm cận lâm sàng' && dynamicInd.testName) {
-            serviceName = dynamicInd.testName;
+          const finalTestName = (dynamicInd.testName && !isDoctorOrPersonName(dynamicInd.testName) && !isLikelyQualitativeResult(dynamicInd.testName) && !isRangeString(dynamicInd.testName))
+            ? dynamicInd.testName
+            : serviceName;
+          if (serviceName === 'Xét nghiệm cận lâm sàng' && finalTestName !== 'Xét nghiệm cận lâm sàng') {
+            serviceName = finalTestName;
           }
-          indicators.push({ ...dynamicInd, performedAt, testName: serviceName });
+          indicators.push({ ...dynamicInd, performedAt, testName: finalTestName });
           return;
         }
       } else {
@@ -1756,10 +2109,13 @@
         const isGarbage = isGarbageIndicator(semanticInd.name, semanticInd.value);
         logDebug(`[Parse] Dòng ${idx} Semantic: name="${semanticInd.name}", value="${semanticInd.value}", range="${semanticInd.range}", isGarbage=${isGarbage}`);
         if (!isGarbage) {
-          if (serviceName === 'Xét nghiệm cận lâm sàng' && semanticInd.testName) {
-            serviceName = semanticInd.testName;
+          const finalTestName = (semanticInd.testName && !isDoctorOrPersonName(semanticInd.testName) && !isLikelyQualitativeResult(semanticInd.testName) && !isRangeString(semanticInd.testName))
+            ? semanticInd.testName
+            : serviceName;
+          if (serviceName === 'Xét nghiệm cận lâm sàng' && finalTestName !== 'Xét nghiệm cận lâm sàng') {
+            serviceName = finalTestName;
           }
-          indicators.push({ ...semanticInd, performedAt, testName: serviceName });
+          indicators.push({ ...semanticInd, performedAt, testName: finalTestName });
           return;
         }
       }
@@ -1770,15 +2126,19 @@
         return;
       }
 
-      const codeVal = cells[codeIdx] || '';
-      const testNameCell = cells[nameIdx] || '';
-      let name = cells[nameIdx + 1] || testNameCell || '';
+      const codeVal = (codeIdx !== -1 && cells[codeIdx]) ? cells[codeIdx] : '';
+      const serviceNameCell = (nameIdx !== -1 && cells[nameIdx]) ? cells[nameIdx] : '';
+      let indicatorName = (nameIdx !== -1 && cells[nameIdx + 1]) ? cells[nameIdx + 1] : serviceNameCell;
       const value = cells[valIdx] || '';
       let range = rangeIdx !== -1 ? (cells[rangeIdx] || '') : '';
       let unit = unitIdx !== -1 ? (cells[unitIdx] || '') : '';
 
-      if (codeVal && name && !name.includes(codeVal) && /^[A-Z0-9._-]+$/i.test(codeVal)) {
-        name = `${name} (${codeVal})`;
+      const rowTestName = (serviceNameCell && !isDoctorOrPersonName(serviceNameCell) && !isLikelyQualitativeResult(serviceNameCell) && !isRangeString(serviceNameCell))
+        ? serviceNameCell
+        : serviceName;
+
+      if (codeVal && indicatorName && !indicatorName.includes(codeVal) && /^[A-Z0-9._-]+$/i.test(codeVal)) {
+        indicatorName = `${indicatorName} (${codeVal})`;
       }
 
       if (!unit && range) {
@@ -1788,22 +2148,15 @@
         }
       }
 
-      name = pickIndicatorLabel(cells, name, codeVal);
-      const isGarbage = isGarbageIndicator(name, value);
-      logDebug(`[Parse] Dòng ${idx} Fallback: name="${name}", value="${value}", range="${range}", isGarbage=${isGarbage}`);
+      indicatorName = pickIndicatorLabel(cells, indicatorName, codeVal);
+      const isGarbage = isGarbageIndicator(indicatorName, value);
+      logDebug(`[Parse] Dòng ${idx} Fallback: name="${indicatorName}", value="${value}", range="${range}", isGarbage=${isGarbage}`);
       if (!isGarbage) {
         let status = evaluateAbnormalStatus(value, range);
-        if (serviceName === 'Xét nghiệm cận lâm sàng' && name && name.length > 12) {
-          const shortCode = [codeVal, ...cells].find(c => c && /^[A-Z]{2,6}$/i.test(c));
-          if (shortCode) {
-            name = shortCode;
-          }
+        if (serviceName === 'Xét nghiệm cận lâm sàng' && rowTestName !== 'Xét nghiệm cận lâm sàng') {
+          serviceName = rowTestName;
         }
-        if (serviceName === 'Xét nghiệm cận lâm sàng') {
-          const rowTestName = testNameCell || cells.find(c => c && c.length > 18 && /\s/.test(c)) || '';
-          if (rowTestName) serviceName = rowTestName;
-        }
-        indicators.push({ name, value, unit, range, status, performedAt, testName: serviceName });
+        indicators.push({ name: indicatorName, value, unit, range, status, performedAt, testName: rowTestName });
       }
     });
 
@@ -2164,6 +2517,11 @@
           const statusText = isHigh ? '▲ Cao' : isLow ? '▼ Thấp' : 'Bình thường';
           const statusClass = isHigh ? 'high' : isLow ? 'low' : 'normal';
 
+          const rawTestName = (ind.testName && !isDoctorOrPersonName(ind.testName) && !isRangeString(ind.testName)) 
+            ? ind.testName 
+            : (group.serviceName && !isDoctorOrPersonName(group.serviceName) && !isRangeString(group.serviceName) ? group.serviceName : 'Xét nghiệm cận lâm sàng');
+          const displayTestName = matchServiceFromOrderedList(rawTestName, ind.name, state.orderedServices);
+
           html += `
             <tr class="${ind.status !== 'NORMAL' ? 'his-abnormal-row' : ''}">
               <td>
@@ -2171,8 +2529,8 @@
                   📅 ${ind.performedAt || displayDate || 'N/A'}
                 </span>
               </td>
-              <td class="his-test-name-col" title="${ind.testName || group.serviceName}">
-                <div class="his-test-name-text">${ind.testName || group.serviceName}</div>
+              <td class="his-test-name-col" title="${displayTestName}">
+                <div class="his-test-name-text">${displayTestName}</div>
               </td>
               <td class="his-indicator-name">${ind.name}</td>
               <td class="his-indicator-value ${statusClass}">${ind.value} <span style="font-size:10px; font-weight:normal; color:#94a3b8;">${ind.unit}</span></td>

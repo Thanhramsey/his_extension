@@ -75,9 +75,9 @@
 .his-drawer-panel {
   position: fixed;
   top: 0;
-  right: -700px;
-  width: 660px;
-  max-width: 90vw;
+  right: -820px;
+  width: 780px;
+  max-width: 92vw;
   height: 100vh;
   z-index: 999995;
   display: flex;
@@ -377,7 +377,7 @@
 
 /* Cột Tên xét nghiệm chữ nhỏ hơn, cắt ngắn chữ bằng dấu ... */
 .his-test-name-col {
-  max-width: 190px;
+  max-width: 250px;
   vertical-align: middle;
 }
 
@@ -389,7 +389,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 190px;
+  max-width: 250px;
 }
 
 .his-indicator-name {
