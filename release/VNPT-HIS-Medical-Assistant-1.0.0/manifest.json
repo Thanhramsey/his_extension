@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "VNPT HIS Medical Assistant - Xem XN & DICOM",
+  "version": "1.0.0",
+  "description": "Tiện ích mở rộng tự động lọc chỉ số Xét nghiệm vượt cận và hiển thị kết quả CĐHA / xem ảnh DICOM khi chọn bệnh nhân trên VNPT HIS.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.vncare.vn/*",
+    "*://*/*vnpthis/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.vncare.vn/*",
+        "*://*/*vnpthis/*",
+        "file://*/*"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "css": ["panel.css"],
+      "js": ["dicom-viewer.js", "content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.css", "injected-interceptor.js", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
