@@ -25,41 +25,47 @@
 /* --- TRIGGER BADGE (NÚT KÍCH HOẠT NỔI TRÊN TRANG HIS) --- */
 .his-assistant-trigger {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  top: 50%;
+  right: 10px;
   z-index: 999990;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
   font-family: var(--his-font);
   font-size: 14px;
   font-weight: 700;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50px;
+  border-radius: 50%;
   box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.5);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(-50%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
 }
 
 .his-assistant-trigger:hover {
-  transform: translateY(-3px) scale(1.03);
+  transform: translateY(-50%) scale(1.08);
   box-shadow: 0 15px 30px -5px rgba(2, 132, 199, 0.7);
 }
 
 .his-assistant-trigger .his-badge-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
   background-color: #dc2626;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   border-radius: 11px;
   animation: pulse-danger 2s infinite;
@@ -92,6 +98,61 @@
 
 .his-drawer-panel.open {
   right: 0;
+}
+
+.his-collapse-handle {
+  position: absolute;
+  top: 50%;
+  left: -34px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 64px;
+  padding: 0;
+  transform: translateY(-50%);
+  background: #0284c7;
+  color: #ffffff;
+  border: 0;
+  border-radius: 10px 0 0 10px;
+  box-shadow: -4px 4px 12px rgba(15, 23, 42, 0.2);
+  cursor: pointer;
+  transition: background-color 0.2s ease, width 0.2s ease, left 0.2s ease;
+}
+
+.his-collapse-handle:hover,
+.his-collapse-handle:focus-visible {
+  left: -40px;
+  width: 40px;
+  background: #0369a1;
+  outline: none;
+}
+
+.his-sheet-selected {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2), 0 10px 24px rgba(2, 132, 199, 0.16) !important;
+}
+
+.his-sheet-focus-pulse {
+  animation: his-sheet-focus 1.15s ease-out;
+}
+
+.his-service-group[data-his-sheet-id],
+.his-imaging-card[data-his-sheet-id] {
+  cursor: pointer;
+}
+
+.his-his-row-focus,
+.his-his-row-focus > td {
+  background-color: #dbeafe !important;
+  box-shadow: inset 0 0 0 2px #0284c7 !important;
+}
+
+@keyframes his-sheet-focus {
+  0% { transform: scale(0.985); background-color: rgba(56, 189, 248, 0.22); }
+  45% { transform: scale(1.006); background-color: rgba(56, 189, 248, 0.1); }
+  100% { transform: scale(1); background-color: transparent; }
 }
 
 /* Header */
@@ -491,6 +552,37 @@
   margin: 10px 0;
   border: 1px solid #e2e8f0;
   border-left-width: 4px;
+}
+
+.his-imaging-description {
+  margin: 10px 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.his-imaging-description summary {
+  padding: 10px 14px;
+  color: #0369a1;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.his-imaging-description[open] summary {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.his-imaging-description-content {
+  max-height: 320px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .his-btn-dicom {

@@ -19,6 +19,7 @@
 
   let activePatientContext = null;
   let activeRisConfig = null;
+  const knownSheetCategories = new Map();
   let lastLoadedContextKey = '';
   let loadGeneration = 0;
 
@@ -55,6 +56,20 @@
   function forwardRelevantResponse(url, payload, responseText, context) {
     const queryName = getQueryName(payload);
     if (!relevantQueries.has(queryName) || !responseText) return;
+
+    // Requests created by our background loader always carry a category. A
+    // detail request without it comes from selecting a sheet in the HIS UI:
+    // notify the panel, but never ingest the same response as another record.
+    if ((!context || !context.category) && (queryName === DETAIL_QUERY || queryName === ORDER_QUERY)) {
+      const sheetId = getOptionValues(payload)[0] || '';
+      if (sheetId) {
+        postToExtension('HIS_SHEET_SELECTED', {
+          sheetId,
+          category: knownSheetCategories.get(String(sheetId)) || ''
+        });
+      }
+      return;
+    }
 
     postToExtension('HIS_XHR_DATA', {
       url: String(url || ''),
@@ -220,7 +235,9 @@
   async function loadRisConfig(uuid) {
     // Let HIS initialize its own RIS globals; getHashRIS depends on them.
     try {
-      if (typeof window.loadRISConfig === 'function') window.loadRISConfig();
+      if (typeof window.loadRISConfig === 'function') {
+        await Promise.resolve(window.loadRISConfig());
+      }
     } catch (e) {}
 
     const response = await originalFetch.call(window, `${window.location.origin}/vnpthis/RestService`, {
@@ -381,6 +398,7 @@
 
   async function loadPatientClinicalData(context) {
     const generation = ++loadGeneration;
+    knownSheetCategories.clear();
     postToExtension('HIS_API_LOADING_STATE', { isLoading: true });
 
     try {
@@ -400,6 +418,13 @@
           sord: 'asc'
         }, { category: 'imaging' })
       ]);
+
+      labSheets.forEach(sheet => {
+        if (sheet && sheet.MAUBENHPHAMID != null) knownSheetCategories.set(String(sheet.MAUBENHPHAMID), 'lab');
+      });
+      imagingSheets.forEach(sheet => {
+        if (sheet && sheet.MAUBENHPHAMID != null) knownSheetCategories.set(String(sheet.MAUBENHPHAMID), 'imaging');
+      });
 
       if (imagingSheets.length > 0) {
         try { await loadRisConfig(context.uuid); } catch (e) { activeRisConfig = null; }
@@ -496,11 +521,41 @@
     };
   }
 
-  window.addEventListener('message', function (event) {
-    if (event.source !== window || !event.data || event.data.type !== 'HIS_API_RELOAD') return;
-    if (activePatientContext) {
-      lastLoadedContextKey = '';
-      loadPatientClinicalData(activePatientContext);
+  window.addEventListener('message', async function (event) {
+    if (event.source !== window || !event.data) return;
+
+    if (event.data.type === 'HIS_API_RELOAD') {
+      if (activePatientContext) {
+        lastLoadedContextKey = '';
+        loadPatientClinicalData(activePatientContext);
+      }
+      return;
+    }
+
+    if (event.data.type === 'HIS_RIS_REFRESH_REQUEST' && activePatientContext) {
+      const requestId = String(event.data.requestId || '');
+      const studyInstanceUID = String(event.data.studyInstanceUID || '').trim();
+      if (!requestId || !studyInstanceUID) return;
+
+      try {
+        // Refresh config/session state and sign a new viewer URL on every click.
+        await loadRisConfig(activePatientContext.uuid);
+        const viewerUrl = await resolveRisViewerUrl({ GHICHU2: studyInstanceUID });
+        postToExtension('HIS_RIS_REFRESH_RESULT', {
+          requestId,
+          studyInstanceUID,
+          viewerUrl,
+          success: !!viewerUrl
+        });
+      } catch (error) {
+        postToExtension('HIS_RIS_REFRESH_RESULT', {
+          requestId,
+          studyInstanceUID,
+          viewerUrl: '',
+          success: false,
+          error: error && error.message ? error.message : 'Không thể làm mới link RIS'
+        });
+      }
     }
   });
 })();

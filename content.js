@@ -39,6 +39,8 @@
     isScanning: false,
     scanProgress: '',
     activeApiContextKey: '',
+    selectedLabSheetId: '',
+    selectedImagingSheetId: '',
     debugLogs: ['[System] Tiện ích đã khởi động']
   };
 
@@ -71,6 +73,8 @@
     state.imagingResults = [];
     state.orderedServices = [];
     state.orderedServiceMap = {};
+    state.selectedLabSheetId = '';
+    state.selectedImagingSheetId = '';
     state.hasScannedCurrentPatient = false;
     state.filterKeyword = '';
     state.selectedPatient = Object.assign({}, state.selectedPatient, {
@@ -277,6 +281,7 @@
 
   let triggerBtn = null;
   let drawerPanel = null;
+  const pendingRisWindows = new Map();
 
   setupNetworkInterceptors();
   setupStorageChangeListener();
@@ -335,6 +340,16 @@
 
       if (event.data.type === 'HIS_EXT_PATIENT_METADATA') {
         applyPatientMetadata(event.data.patient || {});
+        return;
+      }
+
+      if (event.data.type === 'HIS_EXT_SHEET_SELECTED') {
+        focusSelectedSheet(event.data.sheetId || '', event.data.category || '');
+        return;
+      }
+
+      if (event.data.type === 'HIS_EXT_RIS_REFRESH_RESULT') {
+        handleRisRefreshResult(event.data);
       }
     });
   }
@@ -385,6 +400,19 @@
         return;
       }
 
+      if (event.data.type === 'HIS_RIS_REFRESH_RESULT') {
+        if (isTopFrame) {
+          handleRisRefreshResult(event.data);
+        } else {
+          try {
+            window.top.postMessage(Object.assign({}, event.data, {
+              type: 'HIS_EXT_RIS_REFRESH_RESULT'
+            }), '*');
+          } catch (e) {}
+        }
+        return;
+      }
+
       if (event.data.type === 'HIS_API_CONTEXT') {
         if (isTopFrame) {
           applyApiPatientContext(event.data.contextKey || '', event.data.careType || '');
@@ -408,6 +436,21 @@
             window.top.postMessage({
               type: 'HIS_EXT_PATIENT_METADATA',
               patient: event.data.patient || {}
+            }, '*');
+          } catch (e) {}
+        }
+        return;
+      }
+
+      if (event.data.type === 'HIS_SHEET_SELECTED') {
+        if (isTopFrame) {
+          focusSelectedSheet(event.data.sheetId || '', event.data.category || '');
+        } else {
+          try {
+            window.top.postMessage({
+              type: 'HIS_EXT_SHEET_SELECTED',
+              sheetId: event.data.sheetId || '',
+              category: event.data.category || ''
             }, '*');
           } catch (e) {}
         }
@@ -463,13 +506,22 @@
     triggerBtn = document.createElement('div');
     triggerBtn.id = 'his-assistant-trigger';
     triggerBtn.className = 'his-assistant-trigger';
+    triggerBtn.setAttribute('role', 'button');
+    triggerBtn.setAttribute('tabindex', '0');
+    triggerBtn.setAttribute('title', 'Mở HIS Assistant');
+    triggerBtn.setAttribute('aria-label', 'Mở HIS Assistant');
     triggerBtn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      <span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
       <span class="his-badge-count" id="his-trigger-badge">0</span>
     `;
 
     triggerBtn.onclick = () => toggleDrawer();
+    triggerBtn.onkeydown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleDrawer();
+      }
+    };
     document.body.appendChild(triggerBtn);
   }
 
@@ -488,6 +540,9 @@
     drawerPanel.className = 'his-drawer-panel';
 
     drawerPanel.innerHTML = `
+      <button id="his-collapse-drawer" class="his-collapse-handle" title="Thu gọn HIS Assistant" aria-label="Thu gọn HIS Assistant">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
       <!-- Header -->
       <div class="his-drawer-header">
         <div class="his-header-top">
@@ -542,6 +597,7 @@
     document.body.appendChild(drawerPanel);
 
     document.getElementById('his-close-drawer').onclick = () => closeDrawer();
+    document.getElementById('his-collapse-drawer').onclick = () => closeDrawer();
     
     document.getElementById('his-rescan-btn').onclick = () => {
       state.labResults = [];
@@ -960,6 +1016,192 @@
     document.getElementById('his-tab-lab').classList.toggle('active', tabName === 'lab');
     document.getElementById('his-tab-imaging').classList.toggle('active', tabName === 'imaging');
     renderContent();
+  }
+
+  function clickClinicalSectionTab(docToUse, category) {
+    const doc = docToUse || document;
+    const candidates = doc.querySelectorAll('button, a, li, [role="tab"], span, div');
+    const wanted = category === 'imaging'
+      ? ['cđha', 'cdha', 'chẩn đoán hình ảnh', 'chan doan hinh anh']
+      : ['xét nghiệm', 'xet nghiem'];
+
+    let best = null;
+    let bestScore = 0;
+    for (const el of candidates) {
+      if (el.closest && (el.closest('#his-assistant-drawer') || el.closest('#his-assistant-trigger'))) continue;
+      const text = cleanString(el.innerText || el.textContent || '').toLowerCase();
+      if (!text || text.length > 50 || !wanted.some(term => text === term || text.includes(term))) continue;
+      let score = text === wanted[0] ? 10 : 5;
+      if (['BUTTON', 'A', 'LI'].includes(el.tagName) || el.getAttribute('role') === 'tab') score += 4;
+      if (score > bestScore) {
+        best = el;
+        bestScore = score;
+      }
+    }
+    if (!best) return false;
+    forceClickElement(best);
+    return true;
+  }
+
+  function findHisSheetRow(doc, sheetId, sheetNumber, category) {
+    const rows = doc.querySelectorAll('tr.jqgrow, tr[role="row"], .dhtmlxGrid tr, .jqx-grid [role="row"]');
+    let bestRow = null;
+    let bestScore = 0;
+
+    rows.forEach(row => {
+      if (row.closest && row.closest('#his-assistant-drawer')) return;
+      const text = cleanString(row.innerText || row.textContent || '');
+      const attrs = [
+        row.id,
+        row.getAttribute('data-id'),
+        row.getAttribute('data-key'),
+        row.getAttribute('data-rowid'),
+        row.getAttribute('onclick')
+      ].filter(Boolean).join(' ');
+      let score = 0;
+      if (sheetId && attrs.includes(sheetId)) score += 20;
+      if (sheetId && text.includes(sheetId)) score += 15;
+      if (sheetNumber && text.includes(sheetNumber)) score += 12;
+
+      const nearbyText = normalizeVietnameseText((row.closest('.ui-jqgrid, [role="grid"], div[class*="grid"]') || row.parentElement || row).innerText || '');
+      if (category === 'lab' && nearbyText.includes('xet nghiem')) score += 3;
+      if (category === 'imaging' && (nearbyText.includes('chan doan hinh anh') || nearbyText.includes('cdha'))) score += 3;
+      if (score > bestScore) {
+        bestRow = row;
+        bestScore = score;
+      }
+    });
+
+    return bestScore >= 12 ? bestRow : null;
+  }
+
+  async function focusSheetOnHis(sheetId, sheetNumber, category) {
+    const normalizedId = cleanString(sheetId);
+    const normalizedNumber = cleanString(sheetNumber);
+    if (!normalizedId && !normalizedNumber) return;
+
+    let targetRow = null;
+    const findTarget = () => {
+      for (const doc of getAllAccessibleDocs()) {
+        const row = findHisSheetRow(doc, normalizedId, normalizedNumber, category);
+        if (row) return row;
+      }
+      return null;
+    };
+
+    targetRow = findTarget();
+    if (!targetRow) {
+      getAllAccessibleDocs().forEach(doc => clickClinicalSectionTab(doc, category));
+      await delay(450);
+      targetRow = findTarget();
+    }
+    if (!targetRow) {
+      logDebug(`[Focus HIS] Không tìm thấy phiếu ${normalizedNumber || normalizedId} trên màn hình HIS`);
+      return;
+    }
+
+    const clickTarget = targetRow.querySelector('td:nth-child(4), td:nth-child(3), td') || targetRow;
+    forceClickElement(clickTarget);
+    forceClickElement(targetRow);
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetRow.classList.remove('his-his-row-focus');
+    void targetRow.offsetWidth;
+    targetRow.classList.add('his-his-row-focus');
+    setTimeout(() => targetRow.classList.remove('his-his-row-focus'), 1800);
+  }
+
+  function bindPanelSheetFocusHandlers(container, category) {
+    const selector = category === 'lab' ? '.his-service-group' : '.his-imaging-card';
+    container.querySelectorAll(selector).forEach(card => {
+      card.onclick = event => {
+        if (event.target.closest('button, a, input, label, summary, details')) return;
+        focusSheetOnHis(
+          card.getAttribute('data-his-sheet-id') || '',
+          card.getAttribute('data-his-sheet-number') || '',
+          category
+        );
+      };
+    });
+  }
+
+  function focusSelectedSheet(sheetId, category) {
+    const normalizedId = cleanString(sheetId);
+    if (!normalizedId) return;
+
+    let targetCategory = category;
+    if (!targetCategory && state.labResults.some(item => cleanString(item.sheetId) === normalizedId)) targetCategory = 'lab';
+    if (!targetCategory && state.imagingResults.some(item => cleanString(item.sheetId) === normalizedId)) targetCategory = 'imaging';
+    if (!targetCategory) return;
+
+    if (targetCategory === 'lab') state.selectedLabSheetId = normalizedId;
+    if (targetCategory === 'imaging') state.selectedImagingSheetId = normalizedId;
+    switchTab(targetCategory);
+
+    requestAnimationFrame(() => {
+      const selector = `[data-his-sheet-id="${CSS.escape(normalizedId)}"]`;
+      const target = document.querySelector(selector);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.remove('his-sheet-focus-pulse');
+      void target.offsetWidth;
+      target.classList.add('his-sheet-focus-pulse');
+    });
+  }
+
+  function handleRisRefreshResult(result) {
+    const requestId = cleanString(result && result.requestId);
+    if (!requestId || !pendingRisWindows.has(requestId)) return;
+
+    const viewerWindow = pendingRisWindows.get(requestId);
+    pendingRisWindows.delete(requestId);
+    const viewerUrl = cleanString(result.viewerUrl || '');
+    const studyId = cleanString(result.studyInstanceUID || '');
+
+    if (result.success && /^https?:\/\//i.test(viewerUrl)) {
+      state.imagingResults.forEach(item => {
+        if (cleanString(item.risStudyId) === studyId) item.dicomUrl = viewerUrl;
+      });
+      if (viewerWindow && !viewerWindow.closed) viewerWindow.location.replace(viewerUrl);
+      renderContent();
+      return;
+    }
+
+    if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
+    alert('Không thể tạo link DICOM/RIS mới. Vui lòng kiểm tra lại phiên đăng nhập HIS.');
+  }
+
+  function openFreshRisViewer(study) {
+    const studyId = cleanString(study && study.risStudyId);
+    if (!studyId) {
+      if (study && /^https?:\/\//i.test(study.dicomUrl || '')) window.open(study.dicomUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // Open synchronously to preserve the user gesture; navigate it after the
+    // asynchronous RIS signing request completes.
+    const viewerWindow = window.open('', '_blank');
+    if (!viewerWindow) {
+      alert('Trình duyệt đang chặn cửa sổ DICOM. Vui lòng cho phép pop-up cho trang HIS.');
+      return;
+    }
+    try { viewerWindow.opener = null; } catch (e) {}
+    viewerWindow.document.title = 'Đang mở DICOM / RIS...';
+    viewerWindow.document.body.textContent = 'Đang tạo đường dẫn DICOM / RIS mới...';
+
+    const requestId = `ris-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    pendingRisWindows.set(requestId, viewerWindow);
+    const message = { type: 'HIS_RIS_REFRESH_REQUEST', requestId, studyInstanceUID: studyId };
+    window.postMessage(message, '*');
+    document.querySelectorAll('iframe').forEach(iframe => {
+      try { iframe.contentWindow.postMessage(message, '*'); } catch (e) {}
+    });
+
+    setTimeout(() => {
+      if (!pendingRisWindows.has(requestId)) return;
+      pendingRisWindows.delete(requestId);
+      if (!viewerWindow.closed) viewerWindow.close();
+      alert('Hết thời gian tạo link DICOM/RIS. Vui lòng tải lại trang HIS và thử lại.');
+    }, 15000);
   }
 
   function isLabTabActive(doc) {
@@ -2416,15 +2658,19 @@
 
       // 2. Quét CĐHA / PACS / DICOM
       const imgServiceName = item.TENDICHVU || item.TENCHIDINH || item.TEN_DICH_VU || item.TEN_CDHA || item.TEN_DVKT || item.SERVICE_NAME;
-      const conclusion = item.KETQUACLS || item.GIATRI_KETQUA || item.KET_LUAN || item.KETLUAN || item.MO_TA || item.MOTA || item.CONCLUSION;
+      const description = item.KETQUACLS || item.MO_TA || item.MOTA || item.DESCRIPTION || '';
+      const conclusion = item.GIATRI_KETQUA || item.KET_LUAN || item.KETLUAN || item.CONCLUSION || '';
       const doctor = item.NGUOITRAKETQUA || item.BACSITHUCHIEN || item.BS_DOC || item.TEN_BS || item.BS_KETLUAN || item.DOCTOR_NAME;
       const dicomUrl = item.URL_PACS || item.LINK_PACS || item.LINK_DICOM || item.DICOM_URL || item.URL || item.PATH;
       const date = item.THOIGIANTRAKETQUA || item.THOIGIANTRAKETQUA1 || item.NGAY_TRA_KQ || item.NGAY_THUC_HIEN || item.DATE;
 
-      if (category === 'imaging' && imgServiceName && (conclusion || dicomUrl)) {
+      if (category === 'imaging' && imgServiceName && (description || conclusion || dicomUrl)) {
         imagingItems.push({
+          sheetId: requestSheetId,
+          sheetNumber: requestSheetNumber,
           serviceName: imgServiceName,
-          conclusion: conclusion || 'Đã có kết quả CĐHA.',
+          description,
+          conclusion: conclusion || 'Chưa có kết luận.',
           doctor: doctor || 'Bác sĩ CĐHA',
           date: date || new Date().toLocaleDateString('vi-VN'),
           dicomUrl: dicomUrl || '',
@@ -2436,10 +2682,13 @@
 
       if (category === 'lab') return;
 
-      if (imgServiceName && (conclusion || dicomUrl) && (imgServiceName.toLowerCase().includes('chụp') || imgServiceName.toLowerCase().includes('siêu âm') || imgServiceName.toLowerCase().includes('ct') || imgServiceName.toLowerCase().includes('x-quang') || imgServiceName.toLowerCase().includes('mri') || dicomUrl)) {
+      if (imgServiceName && (description || conclusion || dicomUrl) && (imgServiceName.toLowerCase().includes('chụp') || imgServiceName.toLowerCase().includes('siêu âm') || imgServiceName.toLowerCase().includes('ct') || imgServiceName.toLowerCase().includes('x-quang') || imgServiceName.toLowerCase().includes('mri') || dicomUrl)) {
         imagingItems.push({
+          sheetId: requestSheetId,
+          sheetNumber: requestSheetNumber,
           serviceName: imgServiceName,
-          conclusion: conclusion || 'Đã có kết quả CĐHA.',
+          description,
+          conclusion: conclusion || 'Chưa có kết luận.',
           doctor: doctor || 'Bác sĩ CĐHA',
           date: date || new Date().toLocaleDateString('vi-VN'),
           dicomUrl: dicomUrl || '',
@@ -2539,6 +2788,7 @@
         item.serviceName || '',
         item.date || '',
         item.doctor || '',
+        item.description || '',
         item.conclusion || '',
         item.dicomUrl || ''
       ].join('|').toLowerCase();
@@ -2718,7 +2968,7 @@
       if (indicatorsToDisplay.length > 0 || shouldShowEmptySheet) {
         hasData = true;
         html += `
-          <div class="his-service-group">
+        <div class="his-service-group ${cleanString(group.sheetId) === state.selectedLabSheetId ? 'his-sheet-selected' : ''}" data-his-sheet-id="${group.sheetId || ''}" data-his-sheet-number="${group.sheetNumber || ''}" title="Bấm để chọn phiếu này trên HIS">
             <div class="his-group-header">
               <span>🩺 ${group.serviceName}</span>
               <span class="his-patient-tag">${displayDate || 'Không rõ ngày'}</span>
@@ -2824,6 +3074,7 @@
         renderLabResults(container);
       };
     }
+    bindPanelSheetFocusHandlers(container, 'lab');
   }
 
   function renderImagingResults(container) {
@@ -2844,23 +3095,15 @@
       .sort((a, b) => parseHISDateTimestamp(b && b.date) - parseHISDateTimestamp(a && a.date));
 
     sortedImagingResults.forEach((study, idx) => {
-      const hasWebUrl = study.dicomUrl && study.dicomUrl.startsWith('http');
-      const webPACSUrl = hasWebUrl ? study.dicomUrl : '';
-      const dicomButton = hasWebUrl
+      const canOpenRis = !!cleanString(study.risStudyId) || (study.dicomUrl && study.dicomUrl.startsWith('http'));
+      const dicomButton = canOpenRis
         ? `<button class="his-btn-dicom" data-study-idx="${idx}">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
              👁️ Xem DICOM / RIS
            </button>`
         : `<button class="his-btn-dicom" disabled title="RIS chưa trả về đường dẫn phim" style="opacity:.55;cursor:not-allowed;">Chưa có link DICOM</button>`;
-      const pacsButton = hasWebUrl
-        ? `<a href="${webPACSUrl}" target="_blank" rel="noopener noreferrer" class="his-btn-pacs-external" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:#1e293b; color:#38bdf8; border:1px solid #0284c7; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none; transition:all 0.2s;">
-             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-             🔗 Mở PACS Web gốc
-           </a>`
-        : '';
-
       html += `
-        <div class="his-imaging-card">
+        <div class="his-imaging-card ${cleanString(study.sheetId) === state.selectedImagingSheetId ? 'his-sheet-selected' : ''}" data-his-sheet-id="${study.sheetId || ''}" data-his-sheet-number="${study.sheetNumber || ''}" title="Bấm để chọn phiếu này trên HIS">
           <div class="his-imaging-title">
             <span>📷 ${study.serviceName}</span>
             <span class="his-patient-tag">${study.date || ''}</span>
@@ -2874,9 +3117,15 @@
             <strong>Kết luận:</strong> ${study.conclusion}
           </div>
 
+          ${study.description ? `
+            <details class="his-imaging-description">
+              <summary>Mô tả chi tiết</summary>
+              <div class="his-imaging-description-content">${study.description}</div>
+            </details>
+          ` : ''}
+
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
             ${dicomButton}
-            ${pacsButton}
           </div>
         </div>
       `;
@@ -2888,11 +3137,10 @@
       btn.onclick = () => {
         const idx = parseInt(btn.getAttribute('data-study-idx'), 10);
         const study = sortedImagingResults[idx];
-        if (study && study.dicomUrl && study.dicomUrl.startsWith('http')) {
-          window.open(study.dicomUrl, '_blank', 'noopener,noreferrer');
-        }
+        if (study) openFreshRisViewer(study);
       };
     });
+    bindPanelSheetFocusHandlers(container, 'imaging');
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
