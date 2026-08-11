@@ -2973,49 +2973,67 @@
               <span>🩺 ${group.serviceName}</span>
               <span class="his-patient-tag">${displayDate || 'Không rõ ngày'}</span>
             </div>
+            <div class="his-table-scroll">
             <table class="his-abnormal-table">
               <thead>
                 <tr>
                   <th>Ngày thực hiện</th>
                   <th>Tên xét nghiệm</th>
                   <th>Tên chỉ số</th>
+                  <th>Trạng thái</th>
                   <th>Kết quả</th>
                   <th>Giá trị BT</th>
-                  <th>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
         `;
 
-        indicatorsToDisplay.forEach(ind => {
-          const isHigh = ind.status === 'HIGH';
-          const isLow = ind.status === 'LOW';
-          const statusText = isHigh ? '▲ Cao' : isLow ? '▼ Thấp' : 'Bình thường';
-          const statusClass = isHigh ? 'high' : isLow ? 'low' : 'normal';
-
-          const rawTestName = (ind.testName && !isDoctorOrPersonName(ind.testName) && !isRangeString(ind.testName)) 
-            ? ind.testName 
+        const preparedIndicators = indicatorsToDisplay.map(ind => {
+          const rawTestName = (ind.testName && !isDoctorOrPersonName(ind.testName) && !isRangeString(ind.testName))
+            ? ind.testName
             : (group.serviceName && !isDoctorOrPersonName(group.serviceName) && !isRangeString(group.serviceName) ? group.serviceName : 'Xét nghiệm cận lâm sàng');
           const displayTestName = matchServiceFromOrderedList(rawTestName, ind.name, state.orderedServices);
+          return { ind, displayTestName, testNameKey: normalizeVietnameseText(displayTestName).trim() };
+        });
+
+        preparedIndicators.forEach((prepared, index) => {
+          const { ind, displayTestName, testNameKey } = prepared;
+          const isHigh = ind.status === 'HIGH';
+          const isLow = ind.status === 'LOW';
+          const statusText = isHigh ? '▲ Cao' : isLow ? '▼ Thấp' : 'BT';
+          const statusClass = isHigh ? 'high' : isLow ? 'low' : 'normal';
+          const startsTestGroup = index === 0 || preparedIndicators[index - 1].testNameKey !== testNameKey;
+          let testGroupSize = 1;
+          if (startsTestGroup) {
+            while (index + testGroupSize < preparedIndicators.length && preparedIndicators[index + testGroupSize].testNameKey === testNameKey) {
+              testGroupSize++;
+            }
+          }
+          const testNameCell = startsTestGroup
+            ? `<td class="his-test-name-col his-test-name-group" rowspan="${testGroupSize}" title="${displayTestName}">
+                 <div class="his-test-name-text">${displayTestName}</div>
+                 ${testGroupSize > 1 ? `<span class="his-test-count">${testGroupSize} chỉ số</span>` : ''}
+               </td>`
+            : '';
 
           html += `
             <tr class="${ind.status !== 'NORMAL' ? 'his-abnormal-row' : ''}">
-              <td>
+              <td class="his-date-cell">
                 <span class="his-date-badge" title="Thời gian thực hiện: ${ind.performedAt || displayDate || 'N/A'}">
                   📅 ${ind.performedAt || displayDate || 'N/A'}
                 </span>
               </td>
-              <td class="his-test-name-col" title="${displayTestName}">
-                <div class="his-test-name-text">${displayTestName}</div>
+              ${testNameCell}
+              <td class="his-indicator-name" title="${ind.name}">
+                <div class="his-indicator-name-text">${ind.name}</div>
               </td>
-              <td class="his-indicator-name">${ind.name}</td>
-              <td class="his-indicator-value ${statusClass}">${ind.value} <span style="font-size:10px; font-weight:normal; color:#94a3b8;">${ind.unit}</span></td>
-              <td style="color:#64748b; font-size:12px;">${ind.range || 'N/A'}</td>
               <td>
                 <span class="his-status-badge ${statusClass}">
                   ${statusText}
                 </span>
               </td>
+              <td class="his-indicator-value ${statusClass}">${ind.value} <span style="font-size:10px; font-weight:normal; color:#94a3b8;">${ind.unit}</span></td>
+              <td class="his-range-cell" title="${ind.range || 'N/A'}">${ind.range || 'N/A'}</td>
             </tr>
           `;
         });
@@ -3031,6 +3049,7 @@
         html += `
               </tbody>
             </table>
+            </div>
           </div>
         `;
       }
