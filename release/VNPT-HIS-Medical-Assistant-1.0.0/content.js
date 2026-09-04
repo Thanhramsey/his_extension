@@ -142,6 +142,8 @@
       v.includes('duong tinh') ||
       v.includes('am tinh') ||
       v.includes('negative') ||
+      v === 'neg' ||
+      v === 'pos' ||
       v.includes('positive') ||
       v.includes('reactive') ||
       v.includes('non reactive') ||
@@ -1331,13 +1333,14 @@
     const text = row.innerText || '';
     // Chỉ chấp nhận mã BN/BA chuẩn để tránh nhận nhầm số phiếu, barcode, STT...
     const matchCode = text.match(/(BA\d+|BN\d+[-_]?\d+)/i);
-    if (matchCode) {
-      const newCode = matchCode[1];
-      if (state.selectedPatient.code !== newCode) {
-        state.selectedPatient.code = newCode;
-      } else {
-        return;
-      }
+    // Chỉ dòng danh sách bệnh nhân có mã BA/BN mới được phép cập nhật tên.
+    // Dòng phiếu XN/CĐHA thường chứa tên bác sĩ và từng bị nhận nhầm là bệnh nhân.
+    if (!matchCode) return;
+    const newCode = matchCode[1];
+    if (state.selectedPatient.code !== newCode) {
+      state.selectedPatient.code = newCode;
+    } else {
+      return;
     }
 
     const cells = Array.from(row.querySelectorAll('td, div, span')).map(c => c.innerText.trim()).filter(Boolean);
@@ -1988,6 +1991,8 @@
       tNorm.includes('duongtinh') ||
       tNorm.includes('negative') ||
       tNorm.includes('positive') ||
+      tNorm === 'neg' ||
+      tNorm === 'pos' ||
       tNorm.includes('khong phat hien') ||
       tNorm.includes('khong thay') ||
       tNorm.includes('khong phan ung') ||
@@ -2619,8 +2624,8 @@
         ['giatriketqua', 'ketqua', 'giatri', 'result', 'val', 'ketquacls']
       );
       let range = pickField(item,
-        ['TRI_SO_BT', 'CHISO_BT', 'TRI_SO_BINH_THUONG', 'GIATRI_BT', 'RANGE', 'TRI_SO_BT_NAM', 'TRI_SO_BT_NU'],
-        ['trisobt', 'chisobt', 'trisobinhthuong', 'giatribt', 'range', 'trisobtnam', 'trisobtnu']
+        ['TRISOBINHTHUONG', 'TRI_SO_BT', 'CHISO_BT', 'TRI_SO_BINH_THUONG', 'GIATRI_BT', 'GIATRIBINHTHUONG', 'RANGE', 'TRI_SO_BT_NAM', 'TRI_SO_BT_NU'],
+        ['trisobinhthuong', 'trisobt', 'chisobt', 'giatribt', 'giatribinhthuong', 'range', 'trisobtnam', 'trisobtnu']
       );
       if (!range && (item.GIATRINHONHAT != null || item.GIATRILONNHAT != null)) {
         const min = cleanString(String(item.GIATRINHONHAT == null ? '' : item.GIATRINHONHAT));
